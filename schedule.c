@@ -21,7 +21,7 @@
 typedef struct IOEvents {
 	int milliseconds;
 	int diskSectorNumber;
-	bool blocked;
+	bool blocked, requested;
 } IOEvents;
 
 
@@ -96,6 +96,7 @@ int main( int argc, char *argv[]) {
 
 			process[readingPID].events[process[readingPID].eventsCounter].milliseconds = millisecondsToMicroseconds(readingMilliseconds);
 			process[readingPID].events[process[readingPID].eventsCounter].diskSectorNumber = readingDiskSectorNumber;
+			process[readingPID].events[process[readingPID].eventsCounter].blocked = false;
 			process[readingPID].eventsCounter++;
 			process[readingPID].currentIO = 0;
 
@@ -114,13 +115,13 @@ int main( int argc, char *argv[]) {
 
     }
     
-    printReadyList();
+    //printReadyList();
 	while(CPU()) {
-		printReadyList();
+	//	printReadyList();
 		
 		
 	}
-
+	printf("R:%d   R:%d\n",2893,127);
 	printf("%d   %d\n",output1/1000,output2/1000);
 	return 0;
 }
@@ -135,10 +136,13 @@ bool CPU() {
 
 	if(process[inExecution].currentIO > -1 && 
 		process[inExecution].currentIO < process[inExecution].eventsCounter &&
+		!process[inExecution].events[process[inExecution].currentIO].requested &&
 		process[inExecution].events[process[inExecution].currentIO].milliseconds == process[inExecution].millisecondsExecuted &&
-		!process[inExecution].events[process[inExecution].currentIO].blocked) {
-
+		!process[inExecution].events[process[inExecution].currentIO].blocked
+		) {
+			
 			process[inExecution].events[process[inExecution].currentIO].blocked = true;
+			process[inExecution].events[process[inExecution].currentIO].requested = true;
 			process[inExecution].millisecondsBlockedStart = actualTime;
 			printStep(inExecution,"ready -> blocked",process[inExecution].events[process[inExecution].currentIO].diskSectorNumber,actualTime);
 			executedTime = 0;
@@ -148,13 +152,12 @@ bool CPU() {
 	currentSector = getCurrentSector();
 
 	queueUpBlockedProcess();
-	
+	inExecution = readyList[0];
 	if (readyListCounter > 0) {
 		inExecution = readyList[0];	
-		
-
 		if(	process[inExecution].currentIO > -1 && 
 			process[inExecution].currentIO < process[inExecution].eventsCounter &&
+
 				currentSector == process[inExecution].events[process[inExecution].currentIO].diskSectorNumber &&
 				!process[inExecution].events[process[inExecution].currentIO].blocked
 			) {
@@ -218,13 +221,14 @@ bool CPU() {
 
 					}
 
-					process[inExecution].events[process[inExecution].currentIO].blocked = true;
-					process[inExecution].millisecondsBlockedStart = actualTime;
 					
+					process[inExecution].millisecondsBlockedStart = actualTime;
+					process[inExecution].events[process[inExecution].currentIO].blocked = true;
+					process[inExecution].events[process[inExecution].currentIO].requested = true;
 					moveReadyList();
 					
 					printStep(inExecution,"running -> blocked",process[inExecution].events[process[inExecution].currentIO].diskSectorNumber,actualTime);
-					
+					printf("proximo a ser executado: %d\n\n",readyList[0]);
 					return true;
 		} 
 		else if(process[inExecution].millisecondsExecuted < process[inExecution].millisecondsLimit){
@@ -280,6 +284,7 @@ void queueUpBlockedProcess() {
 	{
 		if(	process[i].currentIO > -1 && 
 			process[i].currentIO < process[i].eventsCounter &&
+			
 			sector == process[i].events[process[i].currentIO].diskSectorNumber && 
 			process[i].events[process[i].currentIO].blocked
 		){
@@ -288,7 +293,8 @@ void queueUpBlockedProcess() {
 				printStep(i,"ready -> running",0,actualTime);
 			}
 			process[i].events[process[i].currentIO].blocked = false;
-			output2 += (actualTime - process[inExecution].millisecondsBlockedStart);
+			// process[inExecution].events[process[inExecution].currentIO].requested = true;
+			output2 += (actualTime - process[i].millisecondsBlockedStart);
 			readyList[readyListCounter++] = i;
 		}
 	}
@@ -316,6 +322,7 @@ void spawnUnblockProcess(){
 				printReadyList();
 			}
 		}
+		queueUpBlockedProcess();
 	} else {
 
 		for (int k = (actualTime - executedTime + 1); k <= actualTime; k++)
@@ -332,14 +339,16 @@ void spawnUnblockProcess(){
 				else if(
 					process[i].currentIO > -1 && 
 					process[i].currentIO < process[i].eventsCounter &&
+					!process[i].events[process[i].currentIO].requested && 
 					sector == process[i].events[process[i].currentIO].diskSectorNumber && 
 					process[i].events[process[i].currentIO].blocked
 				){
-					printStep(i,"blocked -> ready",sector,k);
+					printStep(i,"blocked -> ready 2",sector,k);
 					if(readyListCounter == 0) {
 						printStep(i,"ready -> running",0,k);
 					}
 					process[i].events[process[i].currentIO].blocked = false;
+					// process[inExecution].events[process[inExecution].currentIO].requested = true;
 					output2 += (actualTime - process[i].millisecondsBlockedStart);
 					readyList[readyListCounter++] = i;
 				}
@@ -352,7 +361,7 @@ void spawnUnblockProcess(){
 
 
 void printReadyList() {
-	//return;
+	return;
 	if(readyListCounter > 0) {
 		for (int i = readyListCounter-1; i >=0; i--)
 		{
