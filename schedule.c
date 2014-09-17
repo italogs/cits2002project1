@@ -197,18 +197,17 @@ bool CPU(int timeQuantum) {
 	if (readyListCounter > 0) {
 		processInExecution = readyList[0];	
 
-
+		//The CPU will execute an IO request until the next IO request or reach the time quantum limit.
 		if(	process[processInExecution].currentIO > -1 && 
 			process[processInExecution].currentIO < process[processInExecution].eventsCounter &&
-
-				currentSector == process[processInExecution].events[process[processInExecution].currentIO].diskSectorNumber &&
-				!process[processInExecution].events[process[processInExecution].currentIO].blocked
-			) {
+			currentSector == process[processInExecution].events[process[processInExecution].currentIO].diskSectorNumber &&
+			!process[processInExecution].events[process[processInExecution].currentIO].blocked
+		) {
 			
 			if(
 				process[processInExecution].currentIO + 1 < process[processInExecution].eventsCounter &&
 				process[processInExecution].events[process[processInExecution].currentIO + 1].milliseconds < process[processInExecution].millisecondsExecuted + timeQuantum
-				) {
+			) {
 				 
 
 				executedTime = process[processInExecution].events[process[processInExecution].currentIO + 1].milliseconds - process[processInExecution].events[process[processInExecution].currentIO ].milliseconds;
@@ -233,11 +232,11 @@ bool CPU(int timeQuantum) {
 				}
 
 			}
-			
+
 			process[processInExecution].currentIO++;
-			
 			return true;
-		} else if(	
+		} else if(
+				//If the CPU finds an IO request, it will execute until the CPU reach the limit and block the IO request
 				process[processInExecution].currentIO > -1 && 
 				process[processInExecution].currentIO < process[processInExecution].eventsCounter &&
 				!process[processInExecution].events[process[processInExecution].currentIO].blocked &&
@@ -262,38 +261,39 @@ bool CPU(int timeQuantum) {
 
 			}
 
+			
 			process[processInExecution].millisecondsBlockedStart = globalTime;
 			process[processInExecution].events[process[processInExecution].currentIO].blocked = true;
 			process[processInExecution].events[process[processInExecution].currentIO].requested = true;
 			moveReadyList(executedTime);
+
 			
 			printStep(processInExecution,"running -> blocked",process[processInExecution].events[process[processInExecution].currentIO].diskSectorNumber,globalTime);
+			return true;
 
-			if(readyListCounter == 0)
-			{
-				return true;
-			}
-
-			processInExecution = readyList[0];
-
-			printStep(processInExecution,"ready -> running", -1 ,globalTime);
 		}
+
 		if(process[processInExecution].millisecondsExecuted < process[processInExecution].millisecondsLimit){
 
+			//If the process executed time plus the time quantum have overcome the limit, the cpu will execute only the necessary time.
 			if( process[processInExecution].millisecondsExecuted + timeQuantum > process[processInExecution].millisecondsLimit ){
 
-					executedTime = process[processInExecution].millisecondsLimit - process[processInExecution].millisecondsExecuted;
-					globalTime += executedTime;
-					process[processInExecution].millisecondsExecuted += executedTime;
+				executedTime = process[processInExecution].millisecondsLimit - process[processInExecution].millisecondsExecuted;
+				globalTime += executedTime;
+				process[processInExecution].millisecondsExecuted += executedTime;
 
 			} else {
-				executedTime = timeQuantum;
 
+				//otherwise, the cpu will execute the whole timeQuantum.
+				executedTime = timeQuantum;
 				process[processInExecution].millisecondsExecuted += executedTime;
 				globalTime += executedTime;
 			}
+
 		}
 		
+
+		//If the process reached its limit, the CPU will exit it.
 		if( process[processInExecution].millisecondsExecuted >= process[processInExecution].millisecondsLimit  ) {
 			moveReadyList(executedTime);
 			printStep(processInExecution,"ready -> exit",-1,globalTime);
@@ -301,7 +301,7 @@ bool CPU(int timeQuantum) {
 			process[processInExecution].millisecondsFinished = globalTime;
 			totalTurnaroundTime += process[processInExecution].millisecondsFinished - process[processInExecution].millisecondsSpawned;
 		} else {
-			
+		//If not, the CPU will mark it as ready and queue again at the end.
 			moveReadyList(executedTime);
 			readyList[readyListCounter++] = processInExecution;
 			if(readyListCounter > 1){
@@ -363,7 +363,6 @@ void spawnUnblockProcess(int executedTime){
 				printStep(i,"spawn -> ready",-1,globalTime);
 				readyList[readyListCounter++] = i;
 				process[i].spawned = true;
-				printReadyList();
 			}
 		}
 		queueUpBlockedProcess();
