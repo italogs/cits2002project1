@@ -45,14 +45,14 @@ int executedTime;
 
 void init();
 int millisecondsToMicroseconds(int milliseconds);
-void printStep(int PID,char string[],int diskSectorNumber);
+void printStep(int PID,char string[],int diskSectorNumber,int absoluteTime);
 int getCurrentSector();
 bool CPU();
 void moveReadyList();
 bool allProcessPerformed();
 void queueUpBlockedProcess();
 int getSectorByTime(int arbitraryTime);	
-void spawnProcess();
+void spawnUnblockProcess();
 void printReadyList();
 
 
@@ -108,8 +108,8 @@ int main( int argc, char *argv[]) {
     		readyList[readyListCounter++] = 0;
 			process[0].spawned = true;
 
-			printStep(0,"spawn -> ready",0);
-			printStep(0,"ready -> running",0);
+			printStep(0,"spawn -> ready",-1,actualTime);
+			printStep(0,"ready -> running",-1,actualTime);
     	}
 
     }
@@ -140,7 +140,7 @@ bool CPU() {
 
 			process[inExecution].events[process[inExecution].currentIO].blocked = true;
 			process[inExecution].millisecondsBlockedStart = actualTime;
-			printStep(inExecution,"ready -> blocked",process[inExecution].events[process[inExecution].currentIO].diskSectorNumber);
+			printStep(inExecution,"ready -> blocked",process[inExecution].events[process[inExecution].currentIO].diskSectorNumber,actualTime);
 			executedTime = 0;
 			moveReadyList();
 			inExecution = readyList[0];
@@ -223,7 +223,7 @@ bool CPU() {
 					
 					moveReadyList();
 					
-					printStep(inExecution,"running -> blocked",process[inExecution].events[process[inExecution].currentIO].diskSectorNumber);
+					printStep(inExecution,"running -> blocked",process[inExecution].events[process[inExecution].currentIO].diskSectorNumber,actualTime);
 					
 					return true;
 		} 
@@ -247,7 +247,7 @@ bool CPU() {
 		
 		if( process[inExecution].millisecondsExecuted >= process[inExecution].millisecondsLimit  ) {
 			moveReadyList();
-			printStep(inExecution,"ready -> exit",0);
+			printStep(inExecution,"ready -> exit",0,actualTime);
 			process[inExecution].performed = true;
 			process[inExecution].millisecondsFinished = actualTime;
 			output1 += process[inExecution].millisecondsFinished - process[inExecution].millisecondsSpawned;
@@ -257,9 +257,9 @@ bool CPU() {
 			moveReadyList();
 			readyList[readyListCounter++] = inExecution;
 			if(readyListCounter > 1){
-				printStep(inExecution,"running -> ready",0);
+				printStep(inExecution,"running -> ready",0,actualTime);
 			} else {
-				printStep(inExecution,"running -> running",0);
+				printStep(inExecution,"running -> running",0,actualTime);
 			}
 			
 		}
@@ -268,7 +268,7 @@ bool CPU() {
 
 		actualTime ++;
 		executedTime = 1;
-		spawnProcess();
+		spawnUnblockProcess();
 	}
 
 	return true;
@@ -283,9 +283,9 @@ void queueUpBlockedProcess() {
 			sector == process[i].events[process[i].currentIO].diskSectorNumber && 
 			process[i].events[process[i].currentIO].blocked
 		){
-			printStep(i,"blocked -> ready",sector);
+			printStep(i,"blocked -> ready",sector,actualTime);
 			if(readyListCounter == 0){
-				printStep(i,"ready -> running",0);
+				printStep(i,"ready -> running",0,actualTime);
 			}
 			process[i].events[process[i].currentIO].blocked = false;
 			output2 += (actualTime - process[inExecution].millisecondsBlockedStart);
@@ -304,36 +304,55 @@ bool allProcessPerformed() {
 	return true;
 }
 
-void spawnProcess(){
+void spawnUnblockProcess(){
 	
 	if(executedTime == 1){
 		for (int i = 0; i < processCounter; i++)
 		{
 			if(process[i].millisecondsSpawned == actualTime && !process[i].spawned){
-				printStep(i,"spawn -> ready",0);
+				printStep(i,"spawn -> ready",0,actualTime);
 				readyList[readyListCounter++] = i;
 				process[i].spawned = true;
 				printReadyList();
 			}
 		}
 	} else {
-	
-		for (int i = 0; i < processCounter; i++)
+
+		for (int k = (actualTime - executedTime + 1); k <= actualTime; k++)
 		{
-			if(process[i].millisecondsSpawned > (actualTime - executedTime) && process[i].millisecondsSpawned < actualTime && !process[i].spawned){
-				printStep(i,"spawn -> ready",-1);
-				readyList[readyListCounter++] = i;
-				process[i].spawned = true;
-				printReadyList();
+			for (int i = 0; i < processCounter; i++)
+			{
+				int sector = getSectorByTime(k);
+				if(process[i].millisecondsSpawned == k && !process[i].spawned){
+					printStep(i,"spawn -> ready",-1,k);
+					readyList[readyListCounter++] = i;
+					process[i].spawned = true;
+					printReadyList();
+				} 
+				else if(
+					process[i].currentIO > -1 && 
+					process[i].currentIO < process[i].eventsCounter &&
+					sector == process[i].events[process[i].currentIO].diskSectorNumber && 
+					process[i].events[process[i].currentIO].blocked
+				){
+					printStep(i,"blocked -> ready",sector,k);
+					if(readyListCounter == 0) {
+						printStep(i,"ready -> running",0,k);
+					}
+					process[i].events[process[i].currentIO].blocked = false;
+					output2 += (actualTime - process[i].millisecondsBlockedStart);
+					readyList[readyListCounter++] = i;
+				}
 			}
 		}
+
 	}
 	
 }
 
 
 void printReadyList() {
-	return;
+	//return;
 	if(readyListCounter > 0) {
 		for (int i = readyListCounter-1; i >=0; i--)
 		{
@@ -341,15 +360,14 @@ void printReadyList() {
 		}
 		printf("\n");
 	} else {
-		printf("[ ]\n");
+		//printf("[ ]\n");
 	}
 }
 
 
 
 void moveReadyList() {
-	
-	spawnProcess();
+	spawnUnblockProcess();
     if(readyListCounter > 0) {
         for(int i=1 ; i < readyListCounter ; i++) {
             readyList[i-1] = readyList[i];
@@ -383,16 +401,10 @@ int millisecondsToMicroseconds(int milliseconds) {
 	return milliseconds * (int)pow(10,3);
 }
 
-void printStep(int PID,char string[],int diskSectorNumber) {
-	if(diskSectorNumber == -1  ){
-		
-		printf("@%d    %d    %s",process[PID].millisecondsSpawned,PID,string);
-
-	} else {
-		printf("@%d    %d    %s",actualTime,PID,string);
-		if(diskSectorNumber != 0 ){
-			printf("    %d",diskSectorNumber);
-		}
+void printStep(int PID,char string[],int diskSectorNumber,int absoluteTime) {
+	printf("@%d    %d    %s",absoluteTime,PID,string);
+	if(diskSectorNumber >= 0 ){
+		printf("    %d",diskSectorNumber);
 	}
 	printf("\n");
 
