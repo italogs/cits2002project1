@@ -150,7 +150,7 @@ int main( int argc, char *argv[]) {
 	
 
 	//output to the user. 
-	printf("%d   %d\n",totalTurnaroundTime/1000,totalBlockedTime/1000);
+	printf("%d %d\n",totalTurnaroundTime/1000,totalBlockedTime/1000);
 	return 0;
 }
 
@@ -433,8 +433,9 @@ int millisecondsToMicroseconds(int milliseconds) {
 }
 
 /* DEBUG FUNCTIONS */
+
 void printStep(int PID,char string[],int diskSectorNumber,int absoluteTime) {
-	return;
+	return;//Comment this line to make it work
 	printf("@%d    %d    %s",absoluteTime,PID,string);
 	if(diskSectorNumber >= 0 ){
 		printf("    %d",diskSectorNumber);
@@ -443,7 +444,7 @@ void printStep(int PID,char string[],int diskSectorNumber,int absoluteTime) {
 }
 
 void printReadyList() {
-	return;
+	return;//Comment this line to make it work
 	if(readyListCounter > 0) {
 		for (int i = readyListCounter-1; i >=0; i--)
 		{
